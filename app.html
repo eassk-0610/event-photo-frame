@@ -1,0 +1,757 @@
+<title>会場フォトフレーム</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
+<style>
+/* Layout: one-screen camera app. 9:16 viewfinder fills the top, a control deck sits below.
+   Deliberately single dark look, like a camera viewfinder, so the photo and frame colors read true. */
+:root {
+  --bg: #111213;
+  --deck: #1b1d1f;
+  --raise: #26292c;
+  --fg: #f4f2ee;
+  --muted: #a1a5aa;
+  --accent: #ffd23f;
+  --danger: #ff8a7a;
+  --font: "Zen Kaku Gothic New", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  color-scheme: dark;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 500 15px/1.6 var(--font);
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+button, .btn { font: inherit; color: inherit; }
+button:focus-visible, .btn:focus-within, .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+.screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px;
+  gap: 12px;
+}
+
+/* ---------- viewfinder ---------- */
+.viewport { flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; }
+.box {
+  position: relative;
+  width: min(100cqw, 100cqh * 9 / 16);
+  aspect-ratio: 9 / 16;
+  max-width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+  touch-action: pan-y;
+}
+.box > video, .box > img, .box > .sample {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.box > img.overlay { object-fit: fill; pointer-events: none; }
+video.mirror { transform: scaleX(-1); }
+.sample {
+  background:
+    radial-gradient(60% 40% at 35% 38%, #c9a27a 0 30%, transparent 31%),
+    radial-gradient(40% 30% at 70% 60%, #6f8fae 0 40%, transparent 41%),
+    linear-gradient(160deg, #3b4a57, #8b7a68 55%, #2b2a2a);
+  filter: saturate(.9);
+}
+.flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.flash.on { animation: flash .35s ease-out; }
+@keyframes flash { from { opacity: .85; } to { opacity: 0; } }
+
+.fallback {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  gap: 12px; padding: 18% 14%;
+  background: rgba(17, 18, 19, .72);
+  text-align: center;
+}
+.fallback p { margin: 0 0 4px; font-size: 14px; color: var(--fg); text-wrap: balance; }
+
+/* ---------- deck ---------- */
+.deck { display: flex; flex-direction: column; gap: 12px; }
+.thumbs {
+  display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px;
+  scrollbar-width: none; justify-content: safe center;
+}
+.thumbs::-webkit-scrollbar { display: none; }
+.thumb {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted); font-size: 11px;
+}
+.thumb span.pic {
+  position: relative; width: 46px; aspect-ratio: 9 / 16; border-radius: 6px; overflow: hidden;
+  background: linear-gradient(160deg, #3b4a57, #8b7a68);
+  outline: 2px solid transparent; outline-offset: 2px;
+}
+.thumb img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.thumb[aria-pressed="true"] { color: var(--fg); }
+.thumb[aria-pressed="true"] span.pic { outline-color: var(--accent); }
+
+.controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.controls > :first-child { justify-self: start; }
+.controls > :last-child { justify-self: end; }
+.round {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-width: 64px; height: 56px; padding: 0 10px; border-radius: 14px;
+  background: var(--raise); border: 0; font-size: 11px; color: var(--fg); cursor: pointer;
+}
+.round { position: relative; }
+.round svg { width: 22px; height: 22px; }
+.round input[type=file] { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.round:focus-within { outline: 3px solid var(--accent); outline-offset: 3px; }
+.round:disabled { opacity: .35; }
+.shutter {
+  width: 76px; height: 76px; border-radius: 50%;
+  border: 5px solid var(--fg); background: var(--fg); background-clip: content-box; padding: 4px;
+  cursor: pointer; transition: transform .1s;
+}
+.shutter:active { transform: scale(.94); }
+.shutter:disabled { opacity: .3; }
+
+.btn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 52px; padding: 0 22px; border-radius: 999px; border: 0;
+  font-weight: 700; font-size: 16px; cursor: pointer; text-decoration: none;
+}
+.btn.primary { background: var(--accent); color: #1a1a1a; }
+.btn.ghost { background: var(--raise); color: var(--fg); }
+.btn.block { width: 100%; }
+.btn input[type=file] { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+
+/* ---------- start ---------- */
+#start { overflow-y: auto; }
+#start .viewport { flex: 1 1 auto; min-height: 220px; }
+.intro { display: flex; flex-direction: column; gap: 10px; }
+.eyebrow { margin: 0; font-size: 12px; letter-spacing: .14em; color: var(--accent); font-weight: 700; }
+h1 { margin: 0; font-size: clamp(22px, 6vw, 30px); font-weight: 900; line-height: 1.3; text-wrap: balance; }
+.lead { margin: 0; color: var(--muted); font-size: 14px; }
+.actions { display: flex; flex-direction: column; gap: 10px; }
+.note { margin: 0; font-size: 12px; color: var(--muted); }
+.banner {
+  margin: 0; padding: 10px 12px; border-radius: 10px;
+  background: #3a2f12; color: #ffe6a0; font-size: 13px;
+}
+
+/* ---------- result ---------- */
+.tagrow {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--deck); border-radius: 12px; padding: 8px 8px 8px 14px;
+}
+.tagrow code { flex: 1; min-width: 0; font: 700 15px/1.4 var(--font); color: var(--accent); overflow-wrap: anywhere; user-select: all; }
+.tagrow button { background: var(--raise); border: 0; border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+.row2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; }
+.hint { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%); z-index: 20;
+  background: var(--fg); color: #111; font-weight: 700; font-size: 14px;
+  padding: 10px 18px; border-radius: 999px; box-shadow: 0 6px 24px rgba(0,0,0,.4);
+  max-width: calc(100% - 32px); text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flash.on { animation: none; }
+  .shutter { transition: none; }
+}
+</style>
+
+<!-- スタート画面 -->
+<section class="screen" id="start">
+  <div class="intro">
+    <p class="eyebrow" id="startEyebrow"></p>
+    <h1>フォトフレームで<br>記念撮影しよう</h1>
+    <p class="lead">カメラにフレームを重ねて撮影し、写真に保存・SNSにシェアできます。アプリのインストールは不要です。</p>
+    <p class="banner" id="inappBanner" hidden>アプリ内ブラウザではカメラが使えないことがあります。右上のメニューから「ブラウザで開く」を選ぶと確実です。</p>
+  </div>
+  <div class="viewport">
+    <div class="box" aria-label="フレームの見本">
+      <div class="sample"></div>
+      <img class="overlay" id="startOverlay" alt="">
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn primary block" id="startBtn" type="button">カメラを起動</button>
+    <label class="btn ghost block">撮った写真から選ぶ
+      <input type="file" id="startPick" accept="image/*">
+    </label>
+    <p class="note">写真はこの端末の中だけで合成され、外部には送信されません。</p>
+  </div>
+</section>
+
+<!-- 撮影画面 -->
+<section class="screen" id="camera" hidden>
+  <div class="viewport">
+    <div class="box" id="stage">
+      <video id="video" playsinline muted autoplay></video>
+      <img class="overlay" id="overlay" alt="">
+      <div class="flash" id="flash"></div>
+      <div class="fallback" id="fallback" hidden>
+        <p id="fallbackMsg"></p>
+        <label class="btn primary block">カメラで撮影
+          <input type="file" id="pickEnv" accept="image/*" capture="environment">
+        </label>
+        <label class="btn ghost block">自撮りで撮影
+          <input type="file" id="pickUser" accept="image/*" capture="user">
+        </label>
+      </div>
+    </div>
+  </div>
+  <div class="deck">
+    <div class="thumbs" id="thumbs" role="group" aria-label="フレームを選ぶ"></div>
+    <div class="controls">
+      <button class="round" id="flipBtn" type="button" aria-label="カメラ切替">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v13H3z"/><path d="M9 13a3 3 0 0 1 5.2-2"/><path d="M15 13a3 3 0 0 1-5.2 2"/><path d="M14 9.5V11h-1.5M10 16.5V15h1.5"/></svg>
+        切替
+      </button>
+      <button class="shutter" id="shutter" type="button" aria-label="撮影"></button>
+      <label class="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>
+        写真
+        <input type="file" id="pickGallery" accept="image/*">
+      </label>
+    </div>
+  </div>
+</section>
+
+<!-- 撮影結果 -->
+<section class="screen" id="result" hidden>
+  <div class="viewport">
+    <div class="box"><img id="resultImg" alt="フレーム付きの写真"></div>
+  </div>
+  <div class="deck">
+    <div class="tagrow">
+      <code id="tagText"></code>
+      <button type="button" id="copyBtn">コピー</button>
+    </div>
+    <div class="row2">
+      <button class="btn ghost" id="retakeBtn" type="button">撮り直す</button>
+      <button class="btn primary" id="saveBtn" type="button">保存・シェア</button>
+    </div>
+    <p class="hint" id="saveHint">保存できない場合は、写真を長押しして「写真に追加」を選んでください。</p>
+  </div>
+</section>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+/* =========================================================
+   設定：イベント名・ハッシュタグ・フレームはここを書き換える
+   作家素材を使う場合は 1080×1920 の透過PNGを docs/frames/ に置き、
+   { id: "artist-a", name: "作家A", src: "frames/artist-a.png" } を追加する
+   ========================================================= */
+const CONFIG = {
+  eventName: "ART EXHIBITION 2026",
+  eventNameJa: "アート展 2026",
+  dateText: "2026.11.20 — 12.06",
+  venue: "TOKYO",
+  hashtag: "#アート展2026",
+  filePrefix: "art-exhibition-2026",
+  frames: [
+    { id: "irodori", name: "いろどり", draw: drawIrodori },
+    { id: "polaroid", name: "ポラロイド", draw: drawPolaroid },
+    { id: "brush", name: "ブラシ", draw: drawBrush },
+    { id: "line", name: "ライン", draw: drawLine },
+  ],
+};
+
+const W = 1080, H = 1920;
+const FONT = '"Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", sans-serif';
+const COLORS = ["#e8432e", "#f6b81c", "#2f8f5b", "#2c5fb8", "#e86fa2", "#1d1d1f"];
+
+/* ---------- 仮デザインのフレーム（Canvasで描画） ---------- */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function rrect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+// 外枠から内側の窓を抜いた領域
+function borderPath(ctx, l, t, r, b, radius) {
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  rrect(ctx, l, t, W - l - r, H - t - b, radius);
+}
+
+function drawIrodori(ctx) {
+  const rnd = mulberry32(7);
+  ctx.save();
+  borderPath(ctx, 64, 64, 64, 300, 28);
+  ctx.fillStyle = "#fbf8f2";
+  ctx.fill("evenodd");
+  ctx.clip("evenodd");
+  for (let i = 0; i < 420; i++) {
+    const x = rnd() * W, y = rnd() * H;
+    ctx.fillStyle = COLORS[Math.floor(rnd() * COLORS.length)];
+    ctx.strokeStyle = ctx.fillStyle;
+    const k = rnd();
+    if (k < 0.55) {
+      ctx.beginPath(); ctx.arc(x, y, 8 + rnd() * 30, 0, Math.PI * 2); ctx.fill();
+    } else if (k < 0.85) {
+      ctx.lineWidth = 6 + rnd() * 10; ctx.lineCap = "round";
+      const a = rnd() * Math.PI, len = 30 + rnd() * 60;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); ctx.stroke();
+    } else {
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(x, y, 14 + rnd() * 20, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  ctx.restore();
+  // 下部のプレート
+  ctx.fillStyle = "#fbf8f2";
+  rrect(ctx, 96, H - 262, W - 192, 196, 24); ctx.fill();
+  ctx.fillStyle = "#1d1d1f";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = `900 60px ${FONT}`;
+  ctx.fillText(CONFIG.eventName, 140, H - 172);
+  ctx.font = `700 38px ${FONT}`;
+  ctx.fillStyle = "#e8432e";
+  ctx.fillText(CONFIG.hashtag, 140, H - 108);
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#5c5a57";
+  ctx.font = `500 30px ${FONT}`;
+  ctx.fillText(CONFIG.dateText, W - 140, H - 108);
+  ctx.textAlign = "left";
+}
+
+function drawPolaroid(ctx) {
+  ctx.save();
+  borderPath(ctx, 56, 56, 56, 360, 0);
+  ctx.fillStyle = "#fbfbf9";
+  ctx.fill("evenodd");
+  ctx.restore();
+  // 窓の内側にうっすら影
+  ctx.strokeStyle = "rgba(0,0,0,.08)"; ctx.lineWidth = 2;
+  ctx.strokeRect(56, 56, W - 112, H - 416);
+  ctx.fillStyle = "#1d1d1f";
+  ctx.font = `900 64px ${FONT}`;
+  ctx.fillText(CONFIG.eventNameJa, 84, H - 220);
+  ctx.font = `500 34px ${FONT}`;
+  ctx.fillStyle = "#6b6a66";
+  ctx.fillText(`${CONFIG.dateText}  ${CONFIG.venue}`, 86, H - 158);
+  ctx.font = `700 38px ${FONT}`;
+  ctx.fillStyle = "#2c5fb8";
+  ctx.fillText(CONFIG.hashtag, 86, H - 92);
+  // 右下にカラーチップ
+  COLORS.slice(0, 5).forEach((c, i) => {
+    ctx.fillStyle = c;
+    ctx.beginPath(); ctx.arc(W - 96 - i * 46, H - 232, 16, 0, Math.PI * 2); ctx.fill();
+  });
+}
+
+function drawBrush(ctx) {
+  const rnd = mulberry32(21);
+  const corner = (cx, cy, dir) => {
+    for (let i = 0; i < 9; i++) {
+      ctx.strokeStyle = COLORS[i % 5];
+      ctx.lineWidth = 26 + rnd() * 40;
+      ctx.lineCap = "round";
+      ctx.globalAlpha = 0.92;
+      const r1 = 120 + i * 48 + rnd() * 30;
+      ctx.beginPath();
+      ctx.moveTo(cx + dir * r1, cy);
+      ctx.quadraticCurveTo(cx + dir * r1 * (0.7 + rnd() * 0.3), cy + dir * r1 * (0.7 + rnd() * 0.3), cx, cy + dir * r1);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  };
+  corner(-40, -40, 1);
+  corner(W + 40, H + 40, -1);
+  // 左上に縦書きのイベント名
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = 16;
+  ctx.font = `900 46px ${FONT}`;
+  ctx.translate(W - 70, 90); ctx.rotate(Math.PI / 2);
+  ctx.fillText(CONFIG.eventName, 0, 0);
+  ctx.restore();
+  // ハッシュタグのピル
+  ctx.font = `700 42px ${FONT}`;
+  const tw = ctx.measureText(CONFIG.hashtag).width;
+  const pw = tw + 72, px = 60, py = H - 170;
+  ctx.fillStyle = "rgba(17,18,19,.78)";
+  rrect(ctx, px, py, pw, 88, 44); ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(CONFIG.hashtag, px + 36, py + 59);
+}
+
+function drawLine(ctx) {
+  ctx.strokeStyle = "#ffffff";
+  ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 10;
+  ctx.lineWidth = 6; ctx.strokeRect(44, 44, W - 88, H - 88);
+  ctx.lineWidth = 2; ctx.strokeRect(64, 64, W - 128, H - 128);
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.font = `700 30px ${FONT}`;
+  ctx.fillText(CONFIG.venue.split("").join(" "), W / 2, 124);
+  ctx.textAlign = "left";
+  ctx.font = `900 54px ${FONT}`;
+  ctx.fillText(CONFIG.eventName, 104, H - 160);
+  ctx.font = `700 34px ${FONT}`;
+  ctx.fillText(CONFIG.hashtag, 104, H - 106);
+  ctx.textAlign = "right";
+  ctx.font = `500 30px ${FONT}`;
+  ctx.fillText(CONFIG.dateText, W - 104, H - 106);
+  ctx.textAlign = "left";
+  ctx.shadowColor = "transparent";
+}
+
+/* ---------- 状態 ---------- */
+const $ = (id) => document.getElementById(id);
+const state = {
+  frameIndex: 0,
+  frameImgs: [],      // HTMLImageElement（1080×1920）
+  frameUrls: [],
+  stream: null,
+  facing: "environment",
+  mirror: false,
+  live: false,
+  resultBlob: null,
+  resultUrl: null,
+};
+let downloadsApi = null; // claude.ai の Artifact 上でのみ使う保存API
+
+function show(id) {
+  for (const s of ["start", "camera", "result"]) $(s).hidden = s !== id;
+}
+let toastTimer;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.hidden = true), 2400);
+}
+
+/* ---------- フレームの準備 ---------- */
+function loadImage(src) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = src;
+  });
+}
+async function buildFrames() {
+  try {
+    await Promise.race([
+      Promise.all([
+        document.fonts.load(`900 60px ${FONT}`, "ART展"),
+        document.fonts.load(`700 40px ${FONT}`, "#アート展"),
+        document.fonts.load(`500 30px ${FONT}`, "2026"),
+      ]),
+      new Promise((r) => setTimeout(r, 2500)),
+    ]);
+  } catch (e) { /* フォントが読めなくても代替フォントで描画する */ }
+  for (const f of CONFIG.frames) {
+    let url;
+    if (f.src) {
+      url = f.src;
+    } else {
+      const c = document.createElement("canvas");
+      c.width = W; c.height = H;
+      f.draw(c.getContext("2d"));
+      url = c.toDataURL("image/png");
+    }
+    state.frameUrls.push(url);
+    state.frameImgs.push(await loadImage(url));
+  }
+}
+function renderThumbs() {
+  const wrap = $("thumbs");
+  wrap.textContent = "";
+  CONFIG.frames.forEach((f, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "thumb";
+    b.setAttribute("aria-pressed", String(i === state.frameIndex));
+    const pic = document.createElement("span"); pic.className = "pic";
+    const img = document.createElement("img"); img.src = state.frameUrls[i]; img.alt = "";
+    pic.appendChild(img);
+    const label = document.createElement("span"); label.textContent = f.name;
+    b.append(pic, label);
+    b.addEventListener("click", () => setFrame(i));
+    wrap.appendChild(b);
+  });
+}
+function setFrame(i) {
+  const n = CONFIG.frames.length;
+  state.frameIndex = (i + n) % n;
+  $("overlay").src = state.frameUrls[state.frameIndex];
+  $("startOverlay").src = state.frameUrls[state.frameIndex];
+  [...$("thumbs").children].forEach((b, k) => b.setAttribute("aria-pressed", String(k === state.frameIndex)));
+  $("thumbs").children[state.frameIndex]?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+}
+
+/* ---------- カメラ ---------- */
+function stopStream() {
+  state.stream?.getTracks().forEach((t) => t.stop());
+  state.stream = null;
+}
+async function openStream(facing) {
+  stopStream();
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1920 } },
+  });
+  state.stream = stream;
+  const v = $("video");
+  v.srcObject = stream;
+  await v.play().catch(() => {});
+  const s = stream.getVideoTracks()[0].getSettings?.() || {};
+  state.mirror = (s.facingMode || facing) === "user";
+  v.classList.toggle("mirror", state.mirror);
+  state.live = true;
+  v.hidden = false;
+  $("fallback").hidden = true;
+  $("shutter").disabled = false;
+  $("flipBtn").disabled = false;
+}
+// claude.ai のプレビューなど、他のページに埋め込まれているか
+function isEmbedded() {
+  try { return window.top !== window.self; } catch (e) { return true; }
+}
+function cameraErrorMessage(e) {
+  if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")) {
+    if (isEmbedded()) return "このプレビュー画面ではライブカメラを使えません（公開版では使えます）。下のボタンから端末のカメラで撮影できます。";
+    return "カメラへのアクセスがオフになっています。ブラウザの設定でこのサイトのカメラを許可し、ページを再読み込みしてください。下のボタンから端末のカメラでも撮影できます。";
+  }
+  if (e && e.name === "NotFoundError") return "カメラが見つかりませんでした。下のボタンから撮影するか、写真を選んでください。";
+  return "この画面ではカメラを直接起動できません。端末のカメラで撮影すると、フレームを重ねて仕上げます。";
+}
+function enterFallback(msg) {
+  stopStream();
+  state.live = false;
+  $("video").hidden = true;
+  $("fallbackMsg").textContent = msg;
+  $("fallback").hidden = false;
+  $("shutter").disabled = true;
+  $("flipBtn").disabled = true;
+  show("camera");
+}
+async function startCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    enterFallback(cameraErrorMessage());
+    return;
+  }
+  const btn = $("startBtn");
+  btn.disabled = true; btn.textContent = "カメラを起動しています…";
+  try {
+    await openStream(state.facing);
+    show("camera");
+  } catch (e) {
+    enterFallback(cameraErrorMessage(e));
+  } finally {
+    btn.disabled = false; btn.textContent = "カメラを起動";
+  }
+}
+async function flipCamera() {
+  const prev = state.facing;
+  state.facing = prev === "user" ? "environment" : "user";
+  try {
+    await openStream(state.facing);
+  } catch (e) {
+    state.facing = prev;
+    toast("カメラを切り替えられませんでした");
+    try { await openStream(prev); } catch (_) { enterFallback(cameraErrorMessage(_)); }
+  }
+}
+
+/* ---------- 合成 ---------- */
+function compose(source, sw, sh, mirror) {
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+  const scale = Math.max(W / sw, H / sh);
+  const dw = sw * scale, dh = sh * scale;
+  ctx.save();
+  if (mirror) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(source, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  ctx.restore();
+  ctx.drawImage(state.frameImgs[state.frameIndex], 0, 0, W, H);
+  return c;
+}
+function showResult(canvas) {
+  try {
+    canvas.toBlob(onResultBlob, "image/jpeg", 0.92);
+  } catch (e) {
+    toast("画像を作れませんでした。もう一度お試しください");
+  }
+}
+function onResultBlob(blob) {
+  if (!blob) { toast("画像を作れませんでした。もう一度お試しください"); return; }
+  if (state.resultUrl) URL.revokeObjectURL(state.resultUrl);
+  state.resultBlob = blob;
+  state.resultUrl = URL.createObjectURL(blob);
+  $("resultImg").src = state.resultUrl;
+  show("result");
+}
+function capture() {
+  const v = $("video");
+  if (!state.live || !v.videoWidth) return;
+  const f = $("flash");
+  f.classList.remove("on"); void f.offsetWidth; f.classList.add("on");
+  const canvas = compose(v, v.videoWidth, v.videoHeight, state.mirror);
+  // 結果を見ている間はカメラを止める（撮り直すときに再起動する）
+  stopStream();
+  showResult(canvas);
+}
+const MAX_FILE_BYTES = 40 * 1024 * 1024;
+const MAX_PIXELS = 60e6;
+async function fromFile(input) {
+  const file = input.files && input.files[0];
+  input.value = "";
+  if (!file) return;
+  // SVG はスクリプトや外部参照を含みうるため受け付けない。type が空の端末（一部の HEIC など）は読み込みで判定する
+  if ((file.type && !/^image\/(jpeg|png|webp|heic|heif|gif|avif)$/i.test(file.type)) || /\.svgz?$/i.test(file.name)) {
+    toast("写真（JPEG・PNG など）を選んでください");
+    return;
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    toast("写真のサイズが大きすぎます");
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await loadImage(url);
+    if (!img.naturalWidth || img.naturalWidth * img.naturalHeight > MAX_PIXELS) throw new Error("size");
+    showResult(compose(img, img.naturalWidth, img.naturalHeight, false));
+  } catch (e) {
+    toast("この写真は読み込めませんでした");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/* ---------- 保存・共有 ---------- */
+function stamp() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+async function copyTag() {
+  try {
+    await navigator.clipboard.writeText(CONFIG.hashtag);
+    toast("ハッシュタグをコピーしました");
+  } catch (e) {
+    const r = document.createRange(); r.selectNodeContents($("tagText"));
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    toast("選択した文字をコピーしてください");
+  }
+}
+async function saveResult() {
+  if (!state.resultBlob) return;
+  const name = `${CONFIG.filePrefix}-${stamp()}.jpg`;
+  if (downloadsApi) {
+    try {
+      await downloadsApi.save({ filename: name, data: state.resultBlob });
+      toast("保存しました");
+    } catch (e) {
+      if (e?.code !== "declined") $("saveHint").hidden = false;
+    }
+    return;
+  }
+  const file = new File([state.resultBlob], name, { type: "image/jpeg" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+    } catch (e) {
+      if (e.name !== "AbortError") $("saveHint").hidden = false;
+    }
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = state.resultUrl; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  $("saveHint").hidden = false;
+}
+
+/* ---------- 初期化 ---------- */
+function setupInAppBrowser() {
+  const ua = navigator.userAgent;
+  // LINE はパラメータで外部ブラウザに切り替えられる
+  if (!isEmbedded() && /\bLine\//i.test(ua) && !/openExternalBrowser=1/.test(location.search)) {
+    const u = new URL(location.href);
+    u.searchParams.set("openExternalBrowser", "1");
+    location.replace(u.toString());
+    return;
+  }
+  if (/Instagram|FBAN|FBAV|\bLine\/|Twitter|TikTok|BytedanceWebview/i.test(ua)) $("inappBanner").hidden = false;
+}
+function setupSwipe() {
+  let x0 = null;
+  const stage = $("stage");
+  stage.addEventListener("pointerdown", (e) => { x0 = e.clientX; });
+  stage.addEventListener("pointerup", (e) => {
+    if (x0 === null) return;
+    const dx = e.clientX - x0; x0 = null;
+    if (Math.abs(dx) > 50) setFrame(state.frameIndex + (dx < 0 ? 1 : -1));
+  });
+}
+async function init() {
+  setupInAppBrowser();
+  $("startEyebrow").textContent = `${CONFIG.eventName}  ·  ${CONFIG.dateText}`;
+  $("tagText").textContent = CONFIG.hashtag;
+  $("saveHint").hidden = true;
+
+  $("startBtn").addEventListener("click", startCamera);
+  $("flipBtn").addEventListener("click", flipCamera);
+  $("shutter").addEventListener("click", capture);
+  for (const id of ["startPick", "pickEnv", "pickUser", "pickGallery"]) {
+    $(id).addEventListener("change", (e) => fromFile(e.target));
+  }
+  $("retakeBtn").addEventListener("click", () => {
+    $("saveHint").hidden = true;
+    if (state.live) {
+      show("camera");
+      if (!state.stream) openStream(state.facing).catch((e) => enterFallback(cameraErrorMessage(e)));
+      return;
+    }
+    show($("fallback").hidden ? "start" : "camera");
+  });
+  $("saveBtn").addEventListener("click", saveResult);
+  $("copyBtn").addEventListener("click", copyTag);
+  setupSwipe();
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      if (state.live) stopStream();
+    } else if (state.live && !$("camera").hidden && !state.stream) {
+      openStream(state.facing).catch((e) => enterFallback(cameraErrorMessage(e)));
+    }
+  });
+
+  await buildFrames();
+  renderThumbs();
+  setFrame(0);
+
+  if (window.claude?.use) {
+    window.claude.use("downloads").then((d) => {
+      downloadsApi = d;
+      if (d) $("saveBtn").textContent = "画像を保存";
+    }).catch(() => {});
+  }
+}
+init();
+</script>
