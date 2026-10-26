@@ -25,3 +25,12 @@ python3 -m http.server 8000 --directory docs
 ```
 
 フレームを追加するときは、PNG を `docs/frames/` に置き、`CONFIG.frames` に `{ id: "artist-a", name: "作家A", src: "frames/artist-a.png" }` を追加する。
+
+## 会場掲示用QRコード
+
+`qr/` に QRコード（`qr.svg` / `qr.png`）と A4 ポスター（`poster-a4.png`, 300dpi）がある。URL を変えたら作り直す。
+
+```sh
+pip install segno pillow zxing-cpp   # zxing-cpp は読み取りテスト用
+python3 tools/make_qr.py [URL]
+```
