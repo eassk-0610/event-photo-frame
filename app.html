@@ -281,8 +281,8 @@ function mulberry32(a) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+// 角丸の四角形をパスに追加する（beginPath はしない。呼び出し側で必要に応じて行う）
 function rrect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
   ctx.arcTo(x + w, y + h, x, y + h, r);
@@ -323,7 +323,7 @@ function drawIrodori(ctx) {
   ctx.restore();
   // 下部のプレート
   ctx.fillStyle = "#fbf8f2";
-  rrect(ctx, 96, H - 262, W - 192, 196, 24); ctx.fill();
+  ctx.beginPath(); rrect(ctx, 96, H - 262, W - 192, 196, 24); ctx.fill();
   ctx.fillStyle = "#1d1d1f";
   ctx.textBaseline = "alphabetic";
   ctx.font = `900 60px ${FONT}`;
@@ -366,12 +366,13 @@ function drawPolaroid(ctx) {
 function drawBrush(ctx) {
   const rnd = mulberry32(21);
   const corner = (cx, cy, dir) => {
-    for (let i = 0; i < 9; i++) {
+    // 写真の中央にかからないよう、四隅の小さな範囲（半径およそ300px以内）に収める
+    for (let i = 0; i < 6; i++) {
       ctx.strokeStyle = COLORS[i % 5];
-      ctx.lineWidth = 26 + rnd() * 40;
+      ctx.lineWidth = 18 + rnd() * 16;
       ctx.lineCap = "round";
       ctx.globalAlpha = 0.92;
-      const r1 = 120 + i * 48 + rnd() * 30;
+      const r1 = 90 + i * 34 + rnd() * 12;
       ctx.beginPath();
       ctx.moveTo(cx + dir * r1, cy);
       ctx.quadraticCurveTo(cx + dir * r1 * (0.7 + rnd() * 0.3), cy + dir * r1 * (0.7 + rnd() * 0.3), cx, cy + dir * r1);
@@ -394,7 +395,7 @@ function drawBrush(ctx) {
   const tw = ctx.measureText(CONFIG.hashtag).width;
   const pw = tw + 72, px = 60, py = H - 170;
   ctx.fillStyle = "rgba(17,18,19,.78)";
-  rrect(ctx, px, py, pw, 88, 44); ctx.fill();
+  ctx.beginPath(); rrect(ctx, px, py, pw, 88, 44); ctx.fill();
   ctx.fillStyle = "#ffffff";
   ctx.fillText(CONFIG.hashtag, px + 36, py + 59);
 }
